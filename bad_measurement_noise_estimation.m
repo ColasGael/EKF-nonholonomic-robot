@@ -2,7 +2,7 @@
 
 %% Framework: unknown measurement noise covariance R
 
-%% Approach: analyse the effect of having a wrong noise covariance estimate (over or under confident) 
+%% Approach: analyse the effect of having a wrong measurement noise covariance estimate (over or under confident) 
 
 clear all 
 close all
@@ -13,7 +13,7 @@ n_f = size(m, 2);
 
 %% Simulation parameters
 % discretization
-dt = 0.01; % (s)
+dt = 0.02; % (s)
 
 % noise parameters
 Q_x = 0.1*dt*eye(3); % process noise
@@ -24,8 +24,12 @@ R = 0.1*eye(n_y); % measurement noise
 sqrt_Q_x = sqrtm(Q_x);
 sqrt_R = sqrtm(R);
 
+% priors for measurement noise
+R_over = 0.01*R; % over-confident
+R_under = 100*R; % under-confident
+
 % number of time steps
-T = 1000;
+T = 500;
 
 %% Initialization
 % initial state
@@ -45,10 +49,6 @@ mu_x_0(1:2) = mu_x_0(1:2) + offset;
 Sigma_x_0 = Sigma_x_0 + offset*eye(3);
 mu_m_0 = mu_m_0 + offset;
 Sigma_m_0 = Sigma_m_0 + offset*eye(2*n_f); % covariance
-
-% priors for measurement noise
-R_over = 0.01*R; % over-confident
-R_under = 100*R; % under-confident
 
 %% Trajectory
 % time history
@@ -134,62 +134,6 @@ function [y, Jg_x, Jg_m] = measurement_model(x, m)
     Jg_m = [Jg_m_range; Jg_m_bearing];
 end
 
-%% EKF localization filter update
-function [mu_x_range_new, Sigma_x_range_new] = EKF_loc_range_update(mu_x_range, Sigma_x_range, m, u, y, dt, Q_x, R)
-    % Predict step
-    [mu_x_tilde, ~, A_x, ~] = dynamics_model(mu_x_range, m, u, dt);
-    Sigma_x_tilde = A_x*Sigma_x_range*A_x' + Q_x;
-    
-    % Update step
-    [y_pred, C_x, ~] = measurement_model(mu_x_tilde, m);
-    
-    % Separate range and bearing measurements
-    y_range = y(1:4,:);
-    y_pred_range = y_pred(1:4,:);
-    C_x_range = C_x(1:4,:);
-    
-    % Update step: range measurements
-    mu_x_range_new = mu_x_tilde + Sigma_x_tilde*C_x_range'*inv(C_x_range*Sigma_x_tilde*C_x_range' + R(1:4,1:4))*(y_range - y_pred_range);
-    Sigma_x_range_new = Sigma_x_tilde - Sigma_x_tilde*C_x_range'*inv(C_x_range*Sigma_x_tilde*C_x_range' + R(1:4,1:4))*C_x_range*Sigma_x_tilde;
-end
-
-function [mu_x_bearing_new, Sigma_x_bearing_new] = EKF_loc_bearing_update(mu_x_bearing, Sigma_x_bearing, m, u, y, dt, Q_x, R)
-    % Predict step
-    [mu_x_tilde, ~, A_x, ~] = dynamics_model(mu_x_bearing, m, u, dt);
-    Sigma_x_tilde = A_x*Sigma_x_bearing*A_x' + Q_x;
-    
-    % Update step
-    [y_pred, C_x, ~] = measurement_model(mu_x_tilde, m);
-    
-    % Separate range and bearing measurements
-    y_bearing = y(5:8,:);
-    y_pred_bearing = y_pred(5:8,:);
-    C_x_bearing = C_x(5:8,:);
-    
-    % Update step: range measurements
-    mu_x_bearing_new = mu_x_tilde + Sigma_x_tilde*C_x_bearing'*inv(C_x_bearing*Sigma_x_tilde*C_x_bearing' + R(5:8,5:8))*(y_bearing - y_pred_bearing);
-    Sigma_x_bearing_new = Sigma_x_tilde - Sigma_x_tilde*C_x_bearing'*inv(C_x_bearing*Sigma_x_tilde*C_x_bearing' + R(5:8,5:8))*C_x_bearing*Sigma_x_tilde;
-end
-
-%% EKF mapping filter update
-function [mu_m_bearing_new, Sigma_m_bearing_new] = EKF_map_bearing_update(mu_m_bearing, Sigma_m_bearing, x, u, y, dt, Q_m, R)
-    % Predict step
-    [~, mu_m_tilde, ~, A_m] = dynamics_model(x, mu_m_bearing, u, dt);
-    Sigma_m_tilde = A_m*Sigma_m_bearing*A_m' + Q_m;
-    
-    % Update step
-    [y_pred, ~, C_m] = measurement_model(x, mu_m_tilde);
-    
-    % Separate range and bearing measurements
-    y_bearing = y(5:8,:);
-    y_pred_bearing = y_pred(5:8,:);
-    C_m_bearing = C_m(5:8,:);
-    
-    % Update step: range measurements
-    mu_m_bearing_new = mu_m_tilde + Sigma_m_tilde*C_m_bearing'*inv(C_m_bearing*Sigma_m_tilde*C_m_bearing' + R(5:8,5:8))*(y_bearing - y_pred_bearing);
-    Sigma_m_bearing_new = Sigma_m_tilde - Sigma_m_tilde*C_m_bearing'*inv(C_m_bearing*Sigma_m_tilde*C_m_bearing' + R(5:8,5:8))*C_m_bearing*Sigma_m_tilde;
-end
-
 %% EKF SLAM filter update
 function [mu_x_new, mu_m_new, Sigma_new] = EKF_slam_update(mu_x, mu_m, Sigma, u, y, dt, Q_x, Q_m, R)
     % Predict step
@@ -241,32 +185,32 @@ function plot_KF(x, m, u, y, mu_x_0, Sigma_x_0, mu_m_0, Sigma_m_0, dt, Q_x, Q_m,
     t = linspace(dt,T*dt, T);
 
     % initialization
-    mu_x = mu_x_0;
-    mu_m = mu_m_0;
-    Sigma = blkdiag(Sigma_x_0, Sigma_m_0);
+    mu_x_correct = mu_x_0;
+    mu_m_correct = mu_m_0;
+    Sigma_correct = blkdiag(Sigma_x_0, Sigma_m_0);
     mu_x_over = mu_x_0;
     mu_m_over = mu_m_0;
-    Sigma_over = Sigma;
+    Sigma_over = Sigma_correct;
     mu_x_under = mu_x_0;
     mu_m_under = mu_m_0;
-    Sigma_under = Sigma;
+    Sigma_under = Sigma_correct;
     
     % Plots
     figure(1); hold on; % EKF SLAM with exact measurement noise covariance
     % plot the trajectory used 
-    plot(x(1,1:end-1), x(2,1:end-1));
+    plot(x(1,2:end), x(2,2:end)); 
     % plot the map features
     scatter(m(1,:), m(2,:), '+', 'r'); hold off
 
     figure(2); hold on; % EKF SLAM with overconfident measurement noise covariance
     % plot the trajectory used 
-    plot(x(1,1:end-1), x(2,1:end-1));
+    plot(x(1,2:end), x(2,2:end)); 
     % plot the map features
     scatter(m(1,:), m(2,:), '+', 'r'); hold off
     
     figure(3); hold on; % EKF SLAM with underconfident measurement noise covariance
     % plot the trajectory used 
-    plot(x(1,1:end-1), x(2,1:end-1)); 
+    plot(x(1,2:end), x(2,2:end)); 
     % plot the map features
     scatter(m(1,:), m(2,:), '+', 'r'); hold off
     
@@ -274,12 +218,12 @@ function plot_KF(x, m, u, y, mu_x_0, Sigma_x_0, mu_m_0, Sigma_m_0, dt, Q_x, Q_m,
     for i=1 : T       
         % EKF SLAM with both range and bearing measurements
             % correct measurement noise covariance
-        [mu_x, mu_m, Sigma] = EKF_slam_update(mu_x, mu_m, Sigma, u(:,i), y(:,i), dt, Q_x, Q_m, R);
-        mus_x(:,i) = mu_x;
+        [mu_x_correct, mu_m_correct, Sigma_correct] = EKF_slam_update(mu_x_correct, mu_m_correct, Sigma_correct, u(:,i), y(:,i), dt, Q_x, Q_m, R);
+        mus_x_correct(:,i) = mu_x_correct;
         if mod(i, floor(T/10)) == 0
             % plot the error ellipse on the robot position
             figure(1); hold on;
-            plot_EE(mu_x(1:2), Sigma(1:2,1:2)); hold off
+            plot_EE(mu_x_correct(1:2), Sigma_correct(1:2,1:2)); hold off
         end
         
             % overconfident measurement noise covariance
@@ -304,15 +248,18 @@ function plot_KF(x, m, u, y, mu_x_0, Sigma_x_0, mu_m_0, Sigma_m_0, dt, Q_x, Q_m,
     
     % EKF SLAM plots
     figure(1); hold on;
-    plot(mus_x(1,:), mus_x(2,:), 'g')
+    plot(mus_x_correct(1,:), mus_x_correct(2,:), 'g')
     legend(["trajectory p", "features position", "position mean", "error ellipse"]);
     title("EKF SLAM with correct measurement noise covariance R"); hold off
+    norm(x(:,2:end) - mus_x_correct)
     figure(2); hold on;
     plot(mus_x_over(1,:), mus_x_over(2,:), 'g')
     legend(["trajectory p", "features position", "position mean", "error ellipse"]);
     title("EKF SLAM with overconfident measurement noise covariance R"); hold off
+    norm(x(:,2:end) - mus_x_over)
     figure(3); hold on;
     plot(mus_x_under(1,:), mus_x_under(2,:), 'g')
     legend(["trajectory p", "features position", "position mean", "error ellipse"]);
     title("EKF SLAM with underconfident measurement noise covariance R"); hold off
+    norm(x(:,2:end) - mus_x_under)
 end
