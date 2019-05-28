@@ -1,2 +1,2 @@
 # EKF-nonholonomic-robot
-Extended Kalman Filter for non_holonomic robot with unknown process noise
+Extended Kalman Filter for non-holonomic robot Simultaneous Localization and Mapping with unknown measurement noise
