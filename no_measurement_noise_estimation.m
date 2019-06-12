@@ -67,7 +67,7 @@ x(:,1) = x0;
 % compute the state history
 for i=1 : T
     % sample the process noise
-    w = sqrt_Q_x * randn(3,1);
+    w = sqrt_Q_x * randn(size(Q_x,1),1);
     % transition model
     [x_next, ~, ~, ~] = dynamics_model(x(:,i), m, u(:,i), dt);
     x(:,i+1) = x_next + w;  

@@ -68,7 +68,7 @@ x(:,1) = x0;
 % compute the state history
 for i=1 : T
     % sample the process noise
-    w = sqrt_Q_x * randn(3,1);
+    w = sqrt_Q_x * randn(size(Q_x,1),1);
     % transition model
     [x_next, ~, ~, ~] = dynamics_model(x(:,i), m, u(:,i), dt);
     x(:,i+1) = x_next + w;  
@@ -349,15 +349,15 @@ function [L2_dist_array, hasDiverged_array, R_dist_array, avg_step_time_array] =
         figure(2); hold on;
         plot(mus_x_correct(1,:), mus_x_correct(2,:), 'g')
         legend(["trajectory p", "features position", "position mean", "error ellipse"]);
-        title("EKF SLAM with estimation of the measurement noise covariance R from a correct prior"); hold off
+        title("EKF SLAM with estimation of R from a correct prior"); hold off
         figure(3); hold on;
         plot(mus_x_over(1,:), mus_x_over(2,:), 'g')
         legend(["trajectory p", "features position", "position mean", "error ellipse"]);
-        title("EKF SLAM with estimation of the measurement noise covariance R from an overconfident prior"); hold off
+        title("EKF SLAM with estimation of R from an overconfident prior"); hold off
         figure(4); hold on;
         plot(mus_x_under(1,:), mus_x_under(2,:), 'g')
         legend(["trajectory p", "features position", "position mean", "error ellipse"]);
-        title("EKF SLAM with estimation of the measurement noise covariance R from an underconfident prior"); hold off
+        title("EKF SLAM with estimation of R from an underconfident prior"); hold off
     end
     
     % compute the simulation metrics
